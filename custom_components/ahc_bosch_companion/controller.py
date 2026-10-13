@@ -52,6 +52,7 @@ class BoschRoomController:
         self.override_mode = "schedule"
         self.override_temperature: float | None = None
         self.last_room_setpoint: float | None = None
+        self._room_stream_initialized = False
         self.ahc_target: float | None = None
         self.ahc_hvac_mode = "unknown"
         self.ahc_protection = False
@@ -260,6 +261,7 @@ class BoschRoomController:
                 self.override_temperature = incoming
             elif (
                 self.room_mode == "schedule"
+                and self._room_stream_initialized
                 and is_physical_schedule_change(
                     source, self.last_room_setpoint, incoming
                 )
@@ -268,6 +270,7 @@ class BoschRoomController:
                 self.override_temperature = incoming
                 _LOGGER.info("Bosch physical adjustment: temporary override %.1f °C", incoming)
             self.last_room_setpoint = incoming
+            self._room_stream_initialized = True
         self._notify()
         self.queue_reconcile()
 
