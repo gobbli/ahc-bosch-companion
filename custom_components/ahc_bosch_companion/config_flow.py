@@ -7,7 +7,8 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlowResult, OptionsFlowWithReload
+from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
 
 from .const import (
@@ -41,7 +42,7 @@ class AHCBoschCompanionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 climate,
                 user_input[CONF_ROOM_MODE],
                 user_input[CONF_ROOM_TEMPERATURE],
-                user_input[CONF_AHC_AUTOMATION],
+                *([user_input[CONF_AHC_AUTOMATION]] if user_input.get(CONF_AHC_AUTOMATION) else []),
                 user_input[CONF_SCHEDULE],
                 *trvs,
                 *modes,
@@ -84,7 +85,7 @@ class AHCBoschCompanionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_ROOM_TOPIC): selector.TextSelector(
                     selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
                 ),
-                vol.Required(CONF_AHC_AUTOMATION): selector.EntitySelector(
+                vol.Optional(CONF_AHC_AUTOMATION): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="automation")
                 ),
                 vol.Required(CONF_SCHEDULE): selector.EntitySelector(
@@ -114,3 +115,42 @@ class AHCBoschCompanionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not {"manual", "pause"}.issubset(set(options)):
                 return False
         return True
+
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> AHCBoschOptionsFlow:
+        """Allow the AHC automation to be selected AFTER creating the proxy."""
+        return AHCBoschOptionsFlow()
+
+
+class AHCBoschOptionsFlow(OptionsFlowWithReload):
+    """Assign the AHC automation when its proxy-based configuration exists."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            if self.hass.states.get(user_input[CONF_AHC_AUTOMATION]) is None:
+                return self.async_show_form(
+                    step_id="init",
+                    data_schema=self._schema(),
+                    errors={"base": "entity_not_found"},
+                )
+            return self.async_create_entry(data=user_input)
+        return self.async_show_form(step_id="init", data_schema=self._schema())
+
+    def _schema(self) -> vol.Schema:
+        current = self.config_entry.options.get(
+            CONF_AHC_AUTOMATION, self.config_entry.data.get(CONF_AHC_AUTOMATION)
+        )
+        return vol.Schema(
+            {
+                vol.Required(
+                    CONF_AHC_AUTOMATION,
+                    description={"suggested_value": current} if current else None,
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="automation")
+                )
+            }
+        )
