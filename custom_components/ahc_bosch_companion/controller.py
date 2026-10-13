@@ -292,13 +292,17 @@ class BoschRoomController:
         self.ahc_target = target
         self.ahc_hvac_mode = mode
         self.last_ahc_trigger = str(event.data.get("last_trigger_id", ""))
-        self.ahc_protection = any(
-            _is_true(event.data.get(key))
-            for key in (
-                "state_window", "is_frost_protection", "is_liming_protection",
-                "is_force_eco_temperature", "is_force_max_temperature",
+        self.ahc_protection = (
+            not _is_true(event.data.get("state"))  # AHC globally inactive.
+            or any(
+                _is_true(event.data.get(key))
+                for key in (
+                    "state_window", "is_frost_protection", "is_liming_protection",
+                    "is_force_eco_temperature", "is_force_max_temperature",
+                )
             )
-        ) or event.data.get("active_party_entity") not in (None, "", "None", "none")
+            or event.data.get("active_party_entity") not in (None, "", "None", "none")
+        )
         self.last_error = None
         self._notify()
         self.queue_reconcile()
