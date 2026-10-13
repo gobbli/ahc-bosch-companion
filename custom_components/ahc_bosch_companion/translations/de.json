@@ -1,0 +1,43 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bosch BTH-RM / BTH-RA und AHC einrichten",
+        "description": "Gesteuerte BETA. Genau EINEN AHC-Zeitplan auswählen. Heizkörper-Climates und Modus-Selects müssen in exakt gleicher Reihenfolge ausgewählt werden; jedes Paar muss zum selben HA-Gerät gehören. Die Ansteuerung bleibt nach jedem Start AUS und wird erst per Schalter freigegeben. Die AHC-Automation ist zunächst optional und wird nach Anlegen der virtuellen Climate-Entität unter 'Konfigurieren' ausgewählt.",
+        "data": {
+          "room_climate": "Bosch Raumthermostat (Climate)",
+          "room_operating_mode": "Betriebsart des Raumthermostats (Select)",
+          "room_temperature": "Raumtemperatursensor",
+          "room_mqtt_topic": "Zigbee2MQTT-Status-Topic des Raums (ohne /set)",
+          "ahc_automation": "AHC-Automation für die virtuelle Climate-Entität",
+          "schedule_entity": "Derselbe HA-Zeitplan wie in AHC",
+          "radiator_climates": "Bosch Heizkörperthermostate (Climates, gleiche Reihenfolge)",
+          "radiator_modes": "Betriebsart-Selects der Heizkörper (gleiche Reihenfolge)"
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Eine Entität fehlt in Home Assistant.",
+      "invalid_topic": "Nur das Raum-Status-Topic eingeben (ohne /set, /get, + oder #).",
+      "invalid_radiators": "Gleich viele Heizkörper-Climates und Betriebsart-Selects auswählen.",
+      "pairing_mismatch": "Climate und Betriebsart-Select jedes Heizkörpers müssen zum GLEICHEN HA-Gerät gehören; Optionen manual und pause werden benötigt."
+    },
+    "abort": {
+      "already_configured": "Dieses Raumthermostat ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "AHC-Automation zuordnen",
+        "description": "Erst die AHC-Automation mit der virtuellen Climate-Entität erstellen, dann hier zuordnen. Der Steuerungsschalter bleibt nach dem Neustart aus.",
+        "data": {
+          "ahc_automation": "AHC-Automation"
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "AHC-Automation nicht gefunden."
+    }
+  }
+}

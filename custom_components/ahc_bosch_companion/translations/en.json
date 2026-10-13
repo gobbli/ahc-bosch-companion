@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure Bosch BTH-RM / BTH-RA and AHC",
+        "description": "Controlled BETA. Select ONE AHC schedule. Radiator climate and operating-mode select lists must be in exactly the same order; each pair must belong to the same HA device. Output is OFF on every start and requires explicit enabling via a switch. The AHC automation is optional during initial setup; select it later with Configure after the virtual climate exists.",
+        "data": {
+          "room_climate": "Bosch room thermostat climate entity",
+          "room_operating_mode": "Bosch room thermostat operating mode (select)",
+          "room_temperature": "Room temperature sensor",
+          "room_mqtt_topic": "Zigbee2MQTT room state topic (no /set)",
+          "ahc_automation": "AHC automation that will target the virtual climate",
+          "schedule_entity": "Same Home Assistant schedule used in AHC",
+          "radiator_climates": "Bosch radiator climates (in corresponding order)",
+          "radiator_modes": "Bosch radiator operating-mode selects (same order)"
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "An entity is missing in Home Assistant.",
+      "invalid_topic": "Enter the room STATE topic only (no /set, /get, + or #).",
+      "invalid_radiators": "Select the same number of radiator climates and operating-mode selects.",
+      "pairing_mismatch": "Every radiator climate must match a manufacturer-mode select on the SAME Home Assistant device, offering manual and pause."
+    },
+    "abort": {
+      "already_configured": "This room is already configured."
+    }
+  },
+  "entity": {
+    "climate": {
+      "ahc_controlled_heating": {
+        "name": "AHC controlled heating"
+      }
+    },
+    "sensor": {
+      "mode": {
+        "name": "Operating mode"
+      },
+      "setpoint": {
+        "name": "Requested setpoint"
+      }
+    },
+    "switch": {
+      "output_enabled": {
+        "name": "Radiator output enabled"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Assign the AHC automation",
+        "description": "First create AHC automation targeting the virtual climate, then select it here. Output remains disabled after reload.",
+        "data": {
+          "ahc_automation": "AHC automation"
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "AHC automation not found."
+    }
+  }
+}
