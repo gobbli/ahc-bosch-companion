@@ -1,0 +1,27 @@
+name: Validate Companion scaffold
+
+on:
+  push:
+    branches:
+      - "feature/**"
+      - master
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Python setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate syntax and metadata
+        run: python -m unittest discover -s tests -v
+      - name: Compile Python sources
+        run: python -m compileall -q custom_components/ahc_bosch_companion
