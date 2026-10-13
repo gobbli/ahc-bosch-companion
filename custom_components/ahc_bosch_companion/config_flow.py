@@ -7,8 +7,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.helpers import selector
 
 from .const import CONF_ROOM_CLIMATE, CONF_ROOM_MODE, DOMAIN
@@ -21,7 +20,7 @@ class AHCBoschCompanionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Choose existing HA room climate and operating-mode entities."""
         errors: dict[str, str] = {}
 
