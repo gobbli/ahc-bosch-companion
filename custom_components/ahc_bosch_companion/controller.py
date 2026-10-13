@@ -72,9 +72,12 @@ class BoschRoomController:
             return False
         if not self.data.get(CONF_AHC_AUTOMATION):
             return False
+        ahc_entity = self.hass.states.get(self.data[CONF_AHC_AUTOMATION])
+        if ahc_entity is None or ahc_entity.state != "on":
+            return False  # Never actuate from a disabled AHC automation.
         if self.room_mode not in ("schedule", "manual", "pause"):
             return False
-        if not self._valid_entity(self.data[CONF_ROOM_TEMPERATURE]):
+        if self.current_temperature is None:
             return False
         for entity in (
             self.data[CONF_ROOM_MODE],
