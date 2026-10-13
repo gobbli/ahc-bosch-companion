@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bosch Raumthermostat verbinden",
+        "description": "Lesende Entwicklungsversion. Vorhandene Zigbee2MQTT-Entitäten auswählen. Es werden keine Befehle an AHC oder Heizkörper gesendet.",
+        "data": {
+          "room_climate": "Climate-Entität des Bosch Raumthermostats",
+          "room_operating_mode": "Select-Entität für Bosch-Betriebsart"
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Eine oder beide Entitäten sind in Home Assistant nicht vorhanden."
+    },
+    "abort": {
+      "already_configured": "Dieses Raumthermostat ist bereits eingerichtet."
+    }
+  }
+}
