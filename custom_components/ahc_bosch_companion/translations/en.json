@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect a Bosch room thermostat",
+        "description": "Read-only development preview. Select existing Zigbee2MQTT entities. No radiator or AHC commands will be sent.",
+        "data": {
+          "room_climate": "Bosch room climate entity",
+          "room_operating_mode": "Bosch room operating-mode select entity"
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "One or both entities are missing in Home Assistant."
+    },
+    "abort": {
+      "already_configured": "This room climate entity is already configured."
+    }
+  }
+}
