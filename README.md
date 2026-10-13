@@ -1,52 +1,33 @@
 # AHC Bosch Companion
 
-Independent Home Assistant custom integration for **Bosch Room Thermostat II**
-and, eventually, **Advanced Heating Control (AHC)**.
+A separate Home Assistant / HACS custom integration for Bosch Room Thermostat II (BTH-RM), Bosch Radiator Thermostat II (BTH-RA), Zigbee2MQTT and the unchanged AHC 5.5.9 blueprint.
 
-> **Status: 0.1.0-dev1 — read-only development preview. NOT a heating controller.**
+**Version 0.1.0b1: supervised pilot only, NOT approved for unattended heating.** The radiator output is OFF after every HA restart or integration reload until explicitly enabled using the Companion safety switch.
 
-## Current capabilities
+## How it works
 
-- Installs as a `custom_components/ahc_bosch_companion` integration.
-- Configurable through **Settings → Devices & services → Add integration**.
-- Choose your existing Zigbee2MQTT Bosch room `climate` entity and its
-  `operating_mode` `select` entity.
-- Creates two read-only diagnostic sensors:
-  - **Operating mode**: `schedule`, `manual`, `pause`
-  - **Requested setpoint**: from the room `climate` entity.
-- Handles entity updates without polling or publishing device commands.
-- Supports multiple room configurations as separate integration entries.
+- AHC controls the virtual climate entity created by this integration, NOT the actual BTH-RA climates.
+- The Companion translates the AHC target into Bosch operating_mode=manual and matching setpoint.
+- AHC OFF or Bosch room PAUSE translates to the Bosch-specific operating_mode=pause.
+- Bosch MANUAL overrides the AHC target. While Bosch is in SCHEDULE, a physical setpoint change temporarily overrides the target until the next on/off edge of ONE configured HA schedule.
+- AHC protection event flags (window/frost/liming/forced controls) take priority over local manual changes.
+- Supports multiple Bosch radiator climates and their matching operating mode selectors.
+- Keeps the existing ten-minute external temperature feeder unchanged; disable AHC calibration for the beta.
+- Does not update the room thermostat's display setpoint, and does not support multiple AHC schedules.
 
-**It does NOT yet** control any radiator thermostat, integrate with AHC,
-preserve override modes, send external temperatures, or synchronize the display.
-It has only static automated tests; no live Home Assistant runtime validation
-or Bosch device testing has been performed.
+## Safety boundaries
 
-## Development branch
+A **successful Home Assistant service call is not Zigbee radio confirmation**. Check the real device state after each action. The safety switch OFF does not change valve positions; it simply stops further Companion commands. On restart the valves retain their previous physical state and automatic Companion output stays OFF. Do not operate unattended.
 
-Work takes place in
-[`feature/initial-hacs-integration`](https://github.com/gobbli/ahc-bosch-companion/tree/feature/initial-hacs-integration).
-The `master` branch is not used for active development until the code is tested.
+**Do not run a legacy setpoint-sync automation or an AHC instance directly controlling the same physical radiators in parallel with the Companion.**
 
-## Installation for developers (not production)
+## Installation and setup
 
-This repo is organized for HACS, but **do not install it from HACS yet**:
-there is no tested release on the default branch.
+Read the complete German instructions before using:
+**[First supervised pilot and rollback](docs/PILOT_DE.md)**.
 
-For an isolated test instance, copy
-`custom_components/ahc_bosch_companion` to
-`<config>/custom_components/ahc_bosch_companion`, restart Home Assistant,
-and use the integration configuration UI. Remove it if Home Assistant logs an
-error. **Do not change any existing heating automation during this test.**
+HACS custom repository URL: https://github.com/gobbli/ahc-bosch-companion (type: Integration). HACS installs from the DEFAULT repository branch, not this development branch. Only install after beta code has been merged.
 
-## Architecture, safety rules, and next steps
+See [architecture](docs/ARCHITECTURE.md). Original AHC: https://github.com/panhans/HomeAssistant. Bosch Zigbee2MQTT docs: https://www.zigbee2mqtt.io/devices/BTH-RM.html and https://www.zigbee2mqtt.io/devices/BTH-RA.html.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-AHC is developed by [panhans](https://github.com/panhans/HomeAssistant).
-This companion is a separate project, not affiliated with Bosch or the AHC author.
-It contains no copied AHC source code.
-
-## License
-
-MIT, see [LICENSE](LICENSE).
+MIT licensed companion code. Not affiliated with Bosch or AHC author.
