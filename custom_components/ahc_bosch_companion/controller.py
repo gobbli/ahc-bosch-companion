@@ -70,6 +70,8 @@ class BoschRoomController:
         """Require usable entities and an AHC event after integration startup."""
         if not self.ahc_seen or self.ahc_hvac_mode not in ("heat", "off"):
             return False
+        if not self.data.get(CONF_AHC_AUTOMATION):
+            return False
         if self.room_mode not in ("schedule", "manual", "pause"):
             return False
         if not self._valid_entity(self.data[CONF_ROOM_TEMPERATURE]):
@@ -269,7 +271,7 @@ class BoschRoomController:
     @callback
     def _ahc_event(self, event: Event) -> None:
         """Read ONLY events from the configured AHC automation."""
-        if event.data.get("automation") != self.data[CONF_AHC_AUTOMATION]:
+        if event.data.get("automation") != self.data.get(CONF_AHC_AUTOMATION):
             return
         mode = event.data.get("hvac_mode")
         if mode not in ("heat", "off"):
