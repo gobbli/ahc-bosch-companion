@@ -94,9 +94,10 @@ class AHCBoschClimate(ClimateEntity):
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Receive AHC HEAT or OFF state."""
-        if hvac_mode not in (HVACMode.HEAT, HVACMode.OFF):
+        actual_mode = str(getattr(hvac_mode, "value", hvac_mode))
+        if actual_mode not in ("heat", "off"):
             raise ValueError("Only HEAT and OFF are supported by the AHC proxy")
-        self._controller.ahc_hvac_mode = hvac_mode.value
+        self._controller.ahc_hvac_mode = actual_mode
         self._controller._notify()
         self._controller.queue_reconcile()
 
