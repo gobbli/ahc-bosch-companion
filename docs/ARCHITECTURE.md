@@ -1,60 +1,48 @@
-# AHC Bosch Companion — Architektur und Sicherheitsregeln
+# AHC Bosch Companion – beta architecture (0.1.0b1)
 
-**Entwicklungsversion 0.1.0-dev1. Kein produktiver Heizungsregler.**
+## Components
 
-## Motivation
+- `config_flow.py`: Select a BTH-RM room climate, room mode select, measured
+  temperature, Zigbee2MQTT room-state topic, ONE Home Assistant schedule,
+  one or more BTH-RA climate + operating-mode select pairs. Device Registry
+  pairing prevents commands being issued to the wrong TRV. AHC automation
+  can be bound later in **Configure**.
+- `controller.py`: Read `ahc_event` from exactly the configured AHC
+  automation, watch MQTT room change source and selected HA schedule, arbitrate
+  physical setpoint changes, schedule boundary resets and safety priorities.
+  Device command output is gated by a switch that initializes OFF on restart.
+- `climate.py`: Expose virtual ClimateEntity. AHC's thermostat list contains
+  ONLY this entity; it exposes AHC requested target and room current temp.
+  It **must not** expose local manual override as the AHC target.
+- `policy.py`: Pure tested rules for schedule/manual/temporary/pause and AHC
+  window/frost/liming/forced controls.
+- `switch.py`: Explicit authorization for physical commands; turning OFF
+  blocks further writes, does **not** issue TRV stop/restore.
+- `sensor.py`: Read-only room mode and requested temperature diagnostics.
 
-Die Integration soll den originalen [Advanced Heating Control](https://github.com/panhans/HomeAssistant)
-Blueprint (zum Projektstart AHC 5.5.9) nicht verändern. Bosch Room Thermostat II
-(BTH-RM) ist die lokale Bedieneinheit und Bosch Radiator Thermostat II (BTH-RA)
-bilden die Stellglieder. Beide werden über Zigbee2MQTT eingebunden.
+## Ownership
 
-## Etappe 1 – implementiert: ausschließlich lesende Diagnose
+Normal AHC schedule -> virtual climate -> Companion -> physical Bosch TRVs.
+AHC's `ahc_event` conveys window/frost/liming context so local manual target
+does not override AHC protection. Bosch radiators require manufacturer
+`operating_mode` manual/pause; standard HVAC OFF is not suitable.
 
-- UI-Setup wählt bereits vorhandene Home-Assistant-Entitäten:
-  `climate` für das Raumthermostat und `select` für `operating_mode`.
-- Zwei neue Sensoren spiegeln den aktuellen Bosch-Modus
-  (`schedule`, `manual`, `pause`) und den Sollwert des Raum-`climate`.
-- Echtzeit-Aktualisierung über Home Assistants State-Change-Events.
-- Keine MQTT-Veröffentlichungen, keine `climate.set_*`-Befehle.
-- Original-AHC und die vorhandene Heizungsautomation werden nicht verändert.
+Companion does NOT send the external room temperature; the **already working**
+10-minute HA automation owns `remote_temperature` for both BTH-RAs until a
+future, separately validated integration step. AHC calibration must be OFF.
 
-Dies ist **keine** voll funktionsfähige HACS-Beta. HACS-Struktur ist vorbereitet,
-die Home-Assistant-Laufzeitprüfung und HACS-Validierung stehen noch aus.
+## Pilot constraints / unsolved
 
-## Geplanter Regelpfad (noch nicht implementiert)
+- Only ONE schedule helper, temporary override expires at its on/off edge.
+  Consecutive blocks with no state edge, multiple schedules or other AHC
+  scheduler logic are not handled.
+- No automatic BTH-RM display synchronization.
+- No explicit Zigbee command acknowledgement or automatic restart after HA
+  reboot. Output resets OFF intentionally.
+- HA service calls can be accepted despite physical communication failures.
+- Only formal manifest tests and isolated policy tests exist; no Bosch hardware
+  testing has been performed. **Use with supervision and rollback plan only.**
+- This integration is independently authored. No AHC blueprint source code
+  is copied. Upstream: https://github.com/panhans/HomeAssistant
 
-```
-Zigbee2MQTT -> Bosch-Zustandsautomat -> AHC/Companion-Vermittlung
-                                    -> genau eine Befehlsinstanz -> beide TRVs
-```
-
-Entscheidend: Eine virtuelle Climate-Entität allein genügt nicht als
-Nachweis sicherer Interoperabilität mit AHC. AHC nutzt Scheduler, Custom Actions,
-Szenen, Frostschutz, Fensterkontakt und andere Eingriffe, die man einzeln prüfen
-muss. Die Vermittlung darf nicht versuchen, eine vermeintliche AHC-Absicht aus
-einer einzelnen Solltemperaturänderung zu erraten.
-
-### Gewünschte Zustandsregeln
-
-1. Bosch `schedule`: AHC steuert nach Zeitplan.
-2. Physische Änderung in `schedule` mit `setpoint_change_source=manual`:
-   temporäre Übersteuerung bis zum **nächsten tatsächlich relevanten AHC-Scheduler-Ereignis**.
-   `setpoint_change_source` bleibt möglicherweise `manual`; nur eine
-   echte Änderung der Solltemperatur ist ein neuer Eingriff.
-3. Bosch `manual`: explizite manuelle Solltemperatur, bis Moduswechsel.
-4. Bosch `pause`: TRVs pausieren; Wiedereintritt in AHC muss deterministisch
-   sein und weitere AHC-Befehle dürfen Pause nicht versehentlich aufheben.
-5. AHC-Sollwert zum Bosch-Raumdisplay zurücksynchronisieren, ohne Feedback-Loop.
-6. Remote-Temperatur an beide TRVs mindestens alle 10 Minuten liefern;
-   innerhalb des späteren Systems genau einen zuständigen Sender verwenden.
-7. Persistenz/Restart, Geräteverfügbarkeit und Fenster-/Frostschutzvorrang
-   müssen mit realen Bosch-Geräten validiert sein, bevor Stellbefehle aktiviert
-   werden.
-
-## Veröffentlichung
-
-Der Companion enthält ausschließlich neu geschriebenen eigenen Code und
-übernimmt keine AHC-Blueprint-Quelldatei. HACS erwartet die Custom-Integration
-unter `custom_components/ahc_bosch_companion/`, ein Manifest und Repo-Metadaten.
-Bis zur fertigen Freigabe bleiben die Änderungen auf einem Entwicklungsbranch.
+Read [PILOT_DE.md](PILOT_DE.md) before testing.
