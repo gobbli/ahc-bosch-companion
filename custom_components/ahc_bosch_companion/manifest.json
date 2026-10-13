@@ -1,0 +1,15 @@
+{
+  "domain": "ahc_bosch_companion",
+  "name": "AHC Bosch Companion",
+  "version": "0.1.0-dev1",
+  "documentation": "https://github.com/gobbli/ahc-bosch-companion",
+  "issue_tracker": "https://github.com/gobbli/ahc-bosch-companion/issues",
+  "codeowners": [
+    "@gobbli"
+  ],
+  "config_flow": true,
+  "integration_type": "helper",
+  "iot_class": "calculated",
+  "dependencies": [],
+  "requirements": []
+}
