@@ -46,7 +46,7 @@ class IntegrationScaffoldTests(unittest.TestCase):
         self.assertIn("if not self.device_ready:", control)
         self.assertIn("if not self.ahc_seen", control)
         self.assertIn('self.hass.bus.async_listen("ahc_event"', control)
-        self.assertIn('if event.data.get("automation") != self.data[CONF_AHC_AUTOMATION]:', control)
+        self.assertIn('if event.data.get("automation") != self.data.get(CONF_AHC_AUTOMATION):', control)
         self.assertIn("if getattr(message, \"retain\", False):", control)
         self.assertIn("is_physical_schedule_change(", control)
 
