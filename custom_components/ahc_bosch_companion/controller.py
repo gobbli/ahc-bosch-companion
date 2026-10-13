@@ -135,6 +135,13 @@ class BoschRoomController:
         room = self.hass.states.get(self.data[CONF_ROOM_CLIMATE])
         if room is not None:
             self.last_room_setpoint = valid_temp(room.attributes.get("temperature"))
+        # Preserve an explicit physical Manual/Pause setting across HA restarts.
+        # In schedule mode a missed boundary resets any temporary override.
+        if self.room_mode == "manual":
+            self.override_mode = "manual"
+            self.override_temperature = self.last_room_setpoint
+        elif self.room_mode == "pause":
+            self.override_mode = "pause"
         self._unsubs.append(
             async_track_state_change_event(
                 self.hass,
