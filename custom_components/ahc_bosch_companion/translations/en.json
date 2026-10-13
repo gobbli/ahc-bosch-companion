@@ -2,19 +2,48 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect a Bosch room thermostat",
-        "description": "Read-only development preview. Select existing Zigbee2MQTT entities. No radiator or AHC commands will be sent.",
+        "title": "Configure Bosch BTH-RM / BTH-RA and AHC",
+        "description": "Controlled BETA. Select ONE AHC schedule. Radiator climate and operating-mode select lists must be in exactly the same order; each pair must belong to the same HA device. Output is OFF on every start and requires explicit enabling via a switch.",
         "data": {
-          "room_climate": "Bosch room climate entity",
-          "room_operating_mode": "Bosch room operating-mode select entity"
+          "room_climate": "Bosch room thermostat climate entity",
+          "room_operating_mode": "Bosch room thermostat operating mode (select)",
+          "room_temperature": "Room temperature sensor",
+          "room_mqtt_topic": "Zigbee2MQTT room state topic (no /set)",
+          "ahc_automation": "AHC automation that will target the virtual climate",
+          "schedule_entity": "Same Home Assistant schedule used in AHC",
+          "radiator_climates": "Bosch radiator climates (in corresponding order)",
+          "radiator_modes": "Bosch radiator operating-mode selects (same order)"
         }
       }
     },
     "error": {
-      "entity_not_found": "One or both entities are missing in Home Assistant."
+      "entity_not_found": "An entity is missing in Home Assistant.",
+      "invalid_topic": "Enter the room STATE topic only (no /set, /get, + or #).",
+      "invalid_radiators": "Select the same number of radiator climates and operating-mode selects.",
+      "pairing_mismatch": "Every radiator climate must match a manufacturer-mode select on the SAME Home Assistant device, offering manual and pause."
     },
     "abort": {
-      "already_configured": "This room climate entity is already configured."
+      "already_configured": "This room is already configured."
+    }
+  },
+  "entity": {
+    "climate": {
+      "ahc_controlled_heating": {
+        "name": "AHC controlled heating"
+      }
+    },
+    "sensor": {
+      "mode": {
+        "name": "Operating mode"
+      },
+      "setpoint": {
+        "name": "Requested setpoint"
+      }
+    },
+    "switch": {
+      "output_enabled": {
+        "name": "Radiator output enabled"
+      }
     }
   }
 }
