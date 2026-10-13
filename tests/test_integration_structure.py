@@ -1,8 +1,4 @@
-"""Static checks for the read-only Companion development scaffold.
-
-No Home Assistant runtime is started here. This is NOT an integration test.
-"""
-
+"""Static structure checks: runtime hardware tests are required before release."""
 from __future__ import annotations
 
 import ast
@@ -16,63 +12,48 @@ COMPONENT = ROOT / "custom_components" / "ahc_bosch_companion"
 
 
 class IntegrationScaffoldTests(unittest.TestCase):
-    def test_manifest(self) -> None:
-        manifest = json.loads((COMPONENT / "manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual(manifest["domain"], "ahc_bosch_companion")
-        self.assertTrue(manifest["config_flow"])
-        self.assertEqual(manifest["version"], "0.1.0-dev1")
-        self.assertEqual(manifest["requirements"], [])
+    def test_manifest(self):
+        m = json.loads((COMPONENT / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(m["domain"], "ahc_bosch_companion")
+        self.assertTrue(m["config_flow"])
+        self.assertEqual(m["version"], "0.1.0b1")
+        self.assertIn("mqtt", m["dependencies"])
 
-    def test_hacs_structure(self) -> None:
-        hacs = json.loads((ROOT / "hacs.json").read_text(encoding="utf-8"))
-        self.assertEqual(hacs["name"], "AHC Bosch Companion")
-        self.assertTrue((COMPONENT / "__init__.py").is_file())
-        self.assertTrue((COMPONENT / "sensor.py").is_file())
+    def test_hacs_structure(self):
+        m = json.loads((ROOT / "hacs.json").read_text(encoding="utf-8"))
+        self.assertEqual(m["name"], "AHC Bosch Companion")
+        for file in ("__init__.py", "climate.py", "config_flow.py", "controller.py",
+                     "policy.py", "sensor.py", "switch.py"):
+            self.assertTrue((COMPONENT / file).is_file(), file)
 
-    def test_translation_json(self) -> None:
+    def test_translations(self):
+        fields = {"room_climate", "room_operating_mode", "room_temperature",
+                  "room_mqtt_topic", "ahc_automation", "schedule_entity",
+                  "radiator_climates", "radiator_modes"}
         for lang in ("de", "en"):
-            with self.subTest(language=lang):
-                obj = json.loads(
-                    (COMPONENT / "translations" / f"{lang}.json").read_text(
-                        encoding="utf-8"
-                    )
-                )
-                self.assertIn("room_climate", obj["config"]["step"]["user"]["data"])
-                self.assertIn(
-                    "room_operating_mode", obj["config"]["step"]["user"]["data"]
-                )
+            content = json.loads((COMPONENT / "translations" / f"{lang}.json").read_text())
+            self.assertEqual(set(content["config"]["step"]["user"]["data"]), fields)
 
-    def test_all_python_files_parse(self) -> None:
-        sources = list(COMPONENT.rglob("*.py"))
-        self.assertGreaterEqual(len(sources), 4)
-        for path in sources:
+    def test_python_syntax(self):
+        for path in COMPONENT.rglob("*.py"):
             with self.subTest(file=path.name):
                 ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
-    def test_no_heating_actuation(self) -> None:
-        """This milestone must be impossible to use as a controller."""
-        for path in COMPONENT.rglob("*.py"):
-            source = path.read_text(encoding="utf-8")
-            with self.subTest(file=path.name):
-                tree = ast.parse(source)
-                for node in ast.walk(tree):
-                    if isinstance(node, ast.Attribute):
-                        self.assertNotIn(
-                            node.attr,
-                            {"async_call", "async_publish", "async_subscribe",
-                             "set_temperature", "set_hvac_mode"},
-                        )
-                    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                        self.assertNotEqual(node.func.attr, "async_set")
-                self.assertNotIn("mqtt.publish", source)
+    def test_output_gated_and_restart_off(self):
+        control = (COMPONENT / "controller.py").read_text(encoding="utf-8")
+        self.assertIn("self.enabled = False", control)
+        self.assertIn("if not self.enabled:", control)
+        self.assertIn("if not self.device_ready:", control)
+        self.assertIn("if not self.ahc_seen", control)
+        self.assertIn('self.hass.bus.async_listen("ahc_event"', control)
+        self.assertIn('if event.data.get("automation") != self.data[CONF_AHC_AUTOMATION]:', control)
+        self.assertIn("if getattr(message, \"retain\", False):", control)
+        self.assertIn("is_physical_schedule_change(", control)
 
-    def test_config_watches_existing_entities(self) -> None:
-        flow = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
-        sensors = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
-        self.assertIn("async_set_unique_id(room_climate)", flow)
-        self.assertIn("_abort_if_unique_id_configured()", flow)
-        self.assertIn("async_track_state_change_event", sensors)
-        self.assertIn("self.async_on_remove(", sensors)
+    def test_trv_pairing_checked_by_device_registry(self):
+        flow = (COMPONENT / "config_flow.py").read_text()
+        self.assertIn("c.device_id != m.device_id", flow)
+        self.assertIn('{"manual", "pause"}', flow)
 
 
 if __name__ == "__main__":
