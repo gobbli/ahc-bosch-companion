@@ -58,10 +58,11 @@ def decide(
     Zigbee standard system_mode does not support a functional OFF state.
     """
     base = valid_temp(ahc_target)
-    if base is None or ahc_hvac_mode not in ("heat", "off"):
-        return None
     if ahc_hvac_mode == "off":
+        # AHC can legitimately use 0 °C as the OFF temperature.
         return Desired("pause")
+    if ahc_hvac_mode != "heat" or base is None:
+        return None
     if ahc_protection:
         return Desired("manual", base)
     if room_mode == "pause":
