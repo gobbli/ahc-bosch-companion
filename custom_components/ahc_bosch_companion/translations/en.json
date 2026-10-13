@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Configure Bosch BTH-RM / BTH-RA and AHC",
-        "description": "Controlled BETA. Select ONE AHC schedule. Radiator climate and operating-mode select lists must be in exactly the same order; each pair must belong to the same HA device. Output is OFF on every start and requires explicit enabling via a switch.",
+        "description": "Controlled BETA. Select ONE AHC schedule. Radiator climate and operating-mode select lists must be in exactly the same order; each pair must belong to the same HA device. Output is OFF on every start and requires explicit enabling via a switch. The AHC automation is optional during initial setup; select it later with Configure after the virtual climate exists.",
         "data": {
           "room_climate": "Bosch room thermostat climate entity",
           "room_operating_mode": "Bosch room thermostat operating mode (select)",
@@ -44,6 +44,20 @@
       "output_enabled": {
         "name": "Radiator output enabled"
       }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Assign the AHC automation",
+        "description": "First create AHC automation targeting the virtual climate, then select it here. Output remains disabled after reload.",
+        "data": {
+          "ahc_automation": "AHC automation"
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "AHC automation not found."
     }
   }
 }
