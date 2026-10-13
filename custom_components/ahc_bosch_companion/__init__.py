@@ -11,7 +11,7 @@ from .controller import BoschRoomController
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Initialize subscriptions before exposing entities."""
-    controller = BoschRoomController(hass, dict(entry.data))
+    controller = BoschRoomController(hass, {**dict(entry.data), **dict(entry.options)})
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = controller
     try:
         await controller.async_start()
