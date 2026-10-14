@@ -1,6 +1,6 @@
-# AHC Bosch Companion – beaufsichtigter erster Test (0.1.0b1)
+# AHC Bosch Companion – beaufsichtigter Test (0.1.0b2)
 
-**Wichtig:** Noch keine unbeaufsichtigte Heizungssteuerung! Das Plugin hat bislang keine echten Hardwaretests bestanden. **Der Ausgangsschalter ist bei jedem HA-Neustart AUS.** Ein AUS schaltet die realen Heizkörper NICHT ab, sondern verhindert neue Companion-Befehle.
+**Wichtig:** Noch keine unbeaufsichtigte Heizungssteuerung! Die Grundfunktionen wurden mit zwei Bosch BTH-RA getestet; die Zuverlässigkeit nach Zeitplanwechsel und die Schutzfunktionen sind noch nicht abschließend bestätigt. **Der Ausgangsschalter ist bei jedem HA-Neustart AUS.** Ein AUS schaltet die realen Heizkörper NICHT ab, sondern verhindert neue Companion-Befehle.
 
 ## A. Vorbereitung
 
@@ -77,3 +77,20 @@ Der Schalter **Radiator output enabled** bleibt **AUS**.
 ## Grenzen der ersten Version
 
 Kein Display-Sollwert-Sync; keine mehreren Zeitpläne oder nahtlosen Zeitblöcke; kein automatischer Neustart der Aktorsteuerung nach HA-Reboot; noch keine reale Gerätequittierungslogik; Zigbee-/MQTT-Unterbrechung kann verzögerte Aktorreaktionen verursachen. **Nicht für Nächte/Urlaub unbeaufsichtigt verwenden.**
+
+## Beta 0.1.0b2: Gezielter Nachtest nach Fehler 23 → 19 → 22 → 19 °C
+
+Bei einem beaufsichtigten Test am 14.10.2026 kam es nach einem Wechsel des HA-Zeitplans
+vorübergehend zu einem Rücksprung eines Ventils auf den alten Komfortwert 22 °C.
+Die Beta b2 wartet bei jeder on/off-Kante auf ein frisches AHC-Ereignis,
+bevor sie wieder einen Heizkörper-Sollwert sendet.
+
+**Bitte erneut nur unter Aufsicht testen:** Raumthermostat auf schedule;
+Heizplan on, lokale temporäre Übersteuerung 23 °C, dann off.
+Beide BTH-RA sollten den neuen AHC-Eco-Wert erreichen, ohne einen alten 22-°C-Befehl
+nach dem neuen 19-°C-Befehl zu erhalten. Die Bosch/HA-Rückmeldungen und Logs
+zeitlich vergleichen (INFO-Logger: `custom_components.ahc_bosch_companion.controller`).
+
+Bei fehlendem neuem AHC-Ereignis bleibt die Ausgabe stehen, statt einen veralteten
+Sollwert auszugeben. Ein erfolgreiches HA-Service-Resultat ist keine Funkquittung.
+Ausgangsschalter AUS stoppt weitere neue Companion-Befehle, **nicht** die Ventile.

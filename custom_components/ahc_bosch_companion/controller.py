@@ -17,7 +17,11 @@ from typing import Any
 from homeassistant.components import mqtt
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, HomeAssistant, State, callback
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 
 from .const import (
     CONF_AHC_AUTOMATION,
@@ -34,6 +38,7 @@ from .policy import Desired, decide, is_physical_schedule_change, valid_temp
 _LOGGER = logging.getLogger(__name__)
 UNKNOWN = {STATE_UNKNOWN, STATE_UNAVAILABLE, None}
 RECONCILE_INTERVAL = timedelta(minutes=10)
+RETRY_DELAY_SECONDS = 25.0  # Retry mismatched device state without Zigbee flooding.
 
 
 def _is_true(value: object) -> bool:
@@ -65,6 +70,11 @@ class BoschRoomController:
         self._needs_reconcile = False
         self._reconcile_task: asyncio.Task[None] | None = None
         self._last_sent: dict[str, tuple[Desired, float]] = {}
+        # A schedule edge invalidates the cached AHC target until AHC replies.
+        self._pending_schedule_ahc = False
+        # Cancel obsolete commands between the two physical radiator updates.
+        self._command_generation = 0
+        self._retry_unsub: Callable[[], None] | None = None
 
     @property
     def device_ready(self) -> bool:
@@ -179,6 +189,7 @@ class BoschRoomController:
     async def async_stop(self) -> None:
         """Tear down callbacks; never issue commands on unload."""
         self.enabled = False
+        self._cancel_retry()
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
@@ -198,7 +209,7 @@ class BoschRoomController:
 
     @callback
     def _source_updated(self, event: Event) -> None:
-        """Handle entity status changes and a single schedule boundary."""
+        """Invalidate the previous AHC target at each schedule on/off edge."""
         old: State | None = event.data.get("old_state")
         new: State | None = event.data.get("new_state")
         if new is None:
@@ -209,11 +220,18 @@ class BoschRoomController:
                 and old.state in ("on", "off")
                 and new.state in ("on", "off")
                 and old.state != new.state
-                and self.override_mode == "temporary"
             ):
-                self.override_mode = "schedule"
-                self.override_temperature = None
-                _LOGGER.info("Temporary room override ended at AHC schedule boundary")
+                # AHC may still be calculating its new target. Do NOT send the
+                # former comfort target when clearing a temporary override.
+                self._pending_schedule_ahc = True
+                self._command_generation += 1
+                if self.override_mode == "temporary":
+                    self.override_mode = "schedule"
+                    self.override_temperature = None
+                _LOGGER.info(
+                    "Schedule %s -> %s; suspending radiator commands until next "
+                    "valid AHC event", old.state, new.state
+                )
         elif new.entity_id == self.data[CONF_ROOM_MODE]:
             self._handle_room_mode(self._mode_from_entity())
         self._notify()
@@ -223,6 +241,7 @@ class BoschRoomController:
     def _handle_room_mode(self, mode: str) -> None:
         if mode not in ("schedule", "manual", "pause") or mode == self.room_mode:
             return
+        old_desired = self.desired
         self.room_mode = mode
         if mode == "schedule":
             self.override_mode = "schedule"
@@ -233,6 +252,8 @@ class BoschRoomController:
         elif mode == "pause":
             self.override_mode = "pause"
             self.override_temperature = None
+        if self.desired != old_desired:
+            self._command_generation += 1
 
     @callback
     def _room_message(self, message: mqtt.ReceiveMessage) -> None:
@@ -246,6 +267,7 @@ class BoschRoomController:
         if not isinstance(payload, dict):
             return
 
+        old_desired = self.desired
         candidate = payload.get("operating_mode")
         if candidate in ("schedule", "manual", "pause"):
             self._handle_room_mode(candidate)
@@ -271,6 +293,8 @@ class BoschRoomController:
                 _LOGGER.info("Bosch physical adjustment: temporary override %.1f °C", incoming)
             self.last_room_setpoint = incoming
             self._room_stream_initialized = True
+        if self.desired != old_desired:
+            self._command_generation += 1
         self._notify()
         self.queue_reconcile()
 
@@ -307,6 +331,19 @@ class BoschRoomController:
             or event.data.get("active_party_entity") not in (None, "", "None", "none")
         )
         self.last_error = None
+        self._command_generation += 1
+        if self._pending_schedule_ahc:
+            self._pending_schedule_ahc = False
+            _LOGGER.info(
+                "Fresh AHC event after schedule edge: mode=%s target=%s "
+                "trigger=%s; radiator output resumed",
+                mode, target, self.last_ahc_trigger,
+            )
+        else:
+            _LOGGER.debug(
+                "AHC event: mode=%s target=%s protection=%s trigger=%s",
+                mode, target, self.ahc_protection, self.last_ahc_trigger,
+            )
         self._notify()
         self.queue_reconcile()
 
@@ -325,10 +362,40 @@ class BoschRoomController:
                 self._async_reconcile_loop()
             )
 
+    @callback
+    def _schedule_retry(self, delay: float = RETRY_DELAY_SECONDS) -> None:
+        """Re-check real HA device state even if Zigbee never sends an echo."""
+        if not self.enabled or self._retry_unsub is not None:
+            return
+        self._retry_unsub = async_call_later(self.hass, max(0.1, delay), self._retry_due)
+
+    @callback
+    def _retry_due(self, now: Any) -> None:
+        self._retry_unsub = None
+        self.queue_reconcile()
+
+    @callback
+    def _cancel_retry(self) -> None:
+        if self._retry_unsub is not None:
+            self._retry_unsub()
+            self._retry_unsub = None
+
+    def _command_is_current(self, generation: int) -> bool:
+        return (
+            self.enabled
+            and not self._pending_schedule_ahc
+            and generation == self._command_generation
+        )
+
     async def _async_reconcile_loop(self) -> None:
         async with self._lock:
             while self._needs_reconcile and self.enabled:
                 self._needs_reconcile = False
+                if self._pending_schedule_ahc:
+                    # Fail closed rather than send the preceding schedule target.
+                    # The next matching AHC event will queue a fresh reconcile.
+                    _LOGGER.debug("Waiting for post-schedule AHC event")
+                    return
                 if not self.device_ready:
                     self.last_error = "Waiting for valid Bosch entities and an AHC event"
                     self._notify()
@@ -336,24 +403,27 @@ class BoschRoomController:
                 desired = self.desired
                 if desired is None:
                     return
+                generation = self._command_generation
                 for climate, mode in zip(
                     self.data[CONF_RADIATORS],
                     self.data[CONF_RADIATOR_MODES],
                     strict=True,
                 ):
-                    if not self.enabled:
+                    if not self._command_is_current(generation):
                         break
                     try:
-                        await self._async_apply(climate, mode, desired)
+                        await self._async_apply(climate, mode, desired, generation)
                     except Exception as err:  # HA/Z2M service layer errors vary
                         self.last_error = f"Command to {climate} failed: {err}"
                         _LOGGER.exception("Bosch radiator command failed")
                         self._notify()
-                        # Retry on next scheduled check, not a busy loop.
+                        # Retry only on next event or interval.
 
     async def _async_apply(
-        self, climate: str, mode_select: str, desired: Desired
+        self, climate: str, mode_select: str, desired: Desired, generation: int
     ) -> None:
+        if not self._command_is_current(generation):
+            return
         mode_state = self.hass.states.get(mode_select)
         climate_state = self.hass.states.get(climate)
         if (
@@ -361,27 +431,60 @@ class BoschRoomController:
             or climate_state is None or climate_state.state in UNKNOWN
         ):
             self.last_error = f"Radiator {climate} unavailable"
+            self._notify()
             return
-        previous = self._last_sent.get(climate)
-        if previous and previous[0] == desired and monotonic() - previous[1] < 90:
-            return  # Avoid flooding sleepy Zigbee TRVs awaiting their echo.
 
-        if mode_state.state != desired.mode:
+        current = valid_temp(climate_state.attributes.get("temperature"))
+        mode_wrong = mode_state.state != desired.mode
+        temperature_wrong = (
+            desired.mode == "manual"
+            and desired.temperature is not None
+            and (current is None or abs(current - desired.temperature) >= 0.1)
+        )
+        if not mode_wrong and not temperature_wrong:
+            return  # HA-reported state matches; avoid unnecessary Zigbee traffic.
+
+        previous = self._last_sent.get(climate)
+        if previous and previous[0] == desired:
+            elapsed = monotonic() - previous[1]
+            if elapsed < RETRY_DELAY_SECONDS:
+                # Unlike b1's unconditional 90 s suppression, this only delays
+                # a retry of a still-MISMATCHED device, then verifies again.
+                self._schedule_retry(RETRY_DELAY_SECONDS - elapsed)
+                _LOGGER.debug(
+                    "Radiator %s still mismatched (%s/%s vs %s); retry in %.1fs",
+                    climate, mode_state.state, current, desired,
+                    RETRY_DELAY_SECONDS - elapsed,
+                )
+                return
+
+        if mode_wrong:
+            _LOGGER.info(
+                "Sending Bosch mode to %s via %s: %s -> %s (requested)",
+                climate, mode_select, mode_state.state, desired.mode,
+            )
             await self.hass.services.async_call(
                 "select", "select_option",
                 {"entity_id": mode_select, "option": desired.mode},
                 blocking=True,
             )
+        # A schedule/room/target change may arrive during the first service call.
+        if not self._command_is_current(generation):
+            _LOGGER.debug("Discarding superseded setpoint command for %s", climate)
+            return
         if desired.mode == "manual" and desired.temperature is not None:
-            current = valid_temp(climate_state.attributes.get("temperature"))
-            # On a pause -> manual transition, always set the temperature.
-            if mode_state.state != "manual" or current is None or abs(current - desired.temperature) >= 0.1:
+            if mode_wrong or temperature_wrong:
+                _LOGGER.info(
+                    "Sending Bosch setpoint to %s: %s -> %.1f°C (requested)",
+                    climate, current, desired.temperature,
+                )
                 await self.hass.services.async_call(
                     "climate", "set_temperature",
                     {"entity_id": climate, "temperature": desired.temperature},
                     blocking=True,
                 )
         self._last_sent[climate] = (desired, monotonic())
+        self._schedule_retry()
         self.last_error = None
         self._notify()
 
@@ -394,4 +497,6 @@ class BoschRoomController:
             _LOGGER.warning("AHC Bosch Companion radiator output explicitly ENABLED")
             self.queue_reconcile()
         else:
+            self._needs_reconcile = False
+            self._cancel_retry()
             _LOGGER.warning("AHC Bosch Companion radiator output DISABLED; valves unchanged")

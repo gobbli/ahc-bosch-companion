@@ -2,7 +2,7 @@
 
 A separate Home Assistant / HACS custom integration for Bosch Room Thermostat II (BTH-RM), Bosch Radiator Thermostat II (BTH-RA), Zigbee2MQTT and the unchanged AHC 5.5.9 blueprint.
 
-**Version 0.1.0b1: supervised pilot only, NOT approved for unattended heating.** The radiator output is OFF after every HA restart or integration reload until explicitly enabled using the Companion safety switch.
+**Version 0.1.0b2: supervised pilot only, NOT approved for unattended heating.** The radiator output is OFF after every HA restart or integration reload until explicitly enabled using the Companion safety switch.
 
 ## How it works
 
@@ -14,6 +14,13 @@ A separate Home Assistant / HACS custom integration for Bosch Room Thermostat II
 - Supports multiple Bosch radiator climates and their matching operating mode selectors.
 - Keeps the existing ten-minute external temperature feeder unchanged; disable AHC calibration for the beta.
 - Does not update the room thermostat's display setpoint, and does not support multiple AHC schedules.
+
+## Changes in 0.1.0b2 (schedule/race hardening)
+
+- A schedule on/off edge suspends radiator commands until a new valid AHC event is received. This prevents a temporary manual override from reverting to the OLD comfort/eco target before AHC recalculates. If AHC never emits a valid event, the controller deliberately waits rather than issuing a stale target.
+- Commands that are superseded by a later AHC, room-mode, or physical override change are not continued to the next device/service operation.
+- The old unconditional 90-second suppression is replaced by state-aware verification and a 25-second cooldown. After requested changes, the integration checks both valves again. If a HA-reported mode/temperature disagrees, it retries; a service call is still not a Zigbee delivery guarantee.
+- Home Assistant INFO logs document outgoing mode/temperature requests and schedule-boundary waits. No unattended use yet: window/frost/liming, device reconnection and long-term stability still require actual testing.
 
 ## Safety boundaries
 
