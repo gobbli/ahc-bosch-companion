@@ -16,7 +16,7 @@ class IntegrationScaffoldTests(unittest.TestCase):
         m = json.loads((COMPONENT / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(m["domain"], "ahc_bosch_companion")
         self.assertTrue(m["config_flow"])
-        self.assertEqual(m["version"], "0.1.0b1")
+        self.assertEqual(m["version"], "0.1.0b2")
         self.assertIn("mqtt", m["dependencies"])
 
     def test_hacs_structure(self):
