@@ -1,7 +1,7 @@
 """Event-driven room controller: AHC owns normal targets, Bosch owns local input.
 
 No radiator action can occur until an explicit in-HA enable switch is turned ON.
-The switch always resets to OFF on each Home Assistant restart/reload.
+The switch stays OFF after restart until manually enabled or a separately opted-in, guarded auto-resume completes.
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ from homeassistant.helpers.event import (
 
 from .const import (
     CONF_AHC_AUTOMATION,
+    CONF_AUTO_RESUME,
     CONF_RADIATORS,
     CONF_RADIATOR_MODES,
     CONF_ROOM_CLIMATE,
@@ -39,6 +40,9 @@ _LOGGER = logging.getLogger(__name__)
 UNKNOWN = {STATE_UNKNOWN, STATE_UNAVAILABLE, None}
 RECONCILE_INTERVAL = timedelta(minutes=10)
 RETRY_DELAY_SECONDS = 25.0  # Retry mismatched device state without Zigbee flooding.
+AUTO_RESUME_CHECK_INTERVAL = timedelta(seconds=15)
+AUTO_RESUME_STABLE_SECONDS = 90.0
+AUTO_RESUME_TELEMETRY_MAX_AGE_SECONDS = 15 * 60.0
 
 
 def _is_true(value: object) -> bool:
@@ -52,7 +56,16 @@ class BoschRoomController:
     def __init__(self, hass: HomeAssistant, data: dict[str, Any]) -> None:
         self.hass = hass
         self.data = data
-        self.enabled = False  # Never persisted: fail-safe after any restart.
+        self.enabled = False  # Do not restore the previous actuator output state.
+        self.auto_resume_configured = bool(data.get(CONF_AUTO_RESUME, False))
+        self.auto_resume_pending = self.auto_resume_configured
+        self.auto_resumed = False
+        # Non-retained room MQTT and observed HA state updates after startup.
+        # HA state updates are NOT Zigbee acknowledgements; see PILOT_DE.md.
+        self._room_mqtt_seen_after_start = False
+        self._source_updates_after_start: dict[str, float] = {}
+        self._last_ahc_event_at: float | None = None
+        self._auto_resume_ready_since: float | None = None
         self.room_mode = "unknown"
         self.override_mode = "schedule"
         self.override_temperature: float | None = None
@@ -104,7 +117,65 @@ class BoschRoomController:
         ):
             if not self._valid_entity(climate) or not self._valid_entity(mode):
                 return False
+        if self.enabled and self.auto_resume_configured and not self._telemetry_recent():
+            return False
         return self.desired is not None
+
+    def _telemetry_recent(self) -> bool:
+        """Require newly observed and reasonably fresh HA state reports."""
+        now = monotonic()
+        required = (self.data[CONF_ROOM_TEMPERATURE], *self.data[CONF_RADIATORS])
+        return all(
+            (seen := self._source_updates_after_start.get(entity)) is not None
+            and 0 <= now - seen <= AUTO_RESUME_TELEMETRY_MAX_AGE_SECONDS
+            for entity in required
+        )
+
+    @property
+    def auto_resume_blockers(self) -> list[str]:
+        """Human-readable diagnostics; a state update is not a radio ACK."""
+        if not self.auto_resume_pending:
+            return []
+        blockers: list[str] = []
+        if not self.ahc_seen or self._last_ahc_event_at is None:
+            blockers.append("Waiting for a new matching AHC event")
+        if self._pending_schedule_ahc:
+            blockers.append("Waiting for AHC after schedule change")
+        if not self._room_mqtt_seen_after_start:
+            blockers.append("Waiting for non-retained Bosch room MQTT state")
+        if not self._telemetry_recent():
+            blockers.append("Waiting for fresh room and both radiator HA updates")
+        if not self.device_ready:
+            blockers.append("Waiting for valid AHC and Bosch entities")
+        return blockers
+
+    @callback
+    def _attempt_auto_resume(self) -> None:
+        """Auto-enable only after all observed inputs remain ready 90 seconds."""
+        if not self.auto_resume_pending or self.enabled:
+            return
+        if self.auto_resume_blockers:
+            self._auto_resume_ready_since = None
+            return
+        now = monotonic()
+        if self._auto_resume_ready_since is None:
+            self._auto_resume_ready_since = now
+            _LOGGER.info("Auto-resume inputs ready; waiting for stable period")
+            return
+        if now - self._auto_resume_ready_since < AUTO_RESUME_STABLE_SECONDS:
+            return
+        self.auto_resume_pending = False
+        self.auto_resumed = True
+        _LOGGER.warning(
+            "AHC Bosch Companion auto-resuming after fresh AHC/room/radiator "
+            "reports and %.0fs stable readiness; reports are not Zigbee ACKs",
+            AUTO_RESUME_STABLE_SECONDS,
+        )
+        self.async_set_control_enabled(True)
+
+    @callback
+    def _auto_resume_tick(self, now: Any) -> None:
+        self._attempt_auto_resume()
 
     @property
     def desired(self) -> Desired | None:
@@ -175,6 +246,12 @@ class BoschRoomController:
                 self.hass, self._periodic_reconcile, RECONCILE_INTERVAL
             )
         )
+        if self.auto_resume_configured:
+            self._unsubs.append(
+                async_track_time_interval(
+                    self.hass, self._auto_resume_tick, AUTO_RESUME_CHECK_INTERVAL
+                )
+            )
         self._unsubs.append(
             await mqtt.async_subscribe(
                 self.hass,
@@ -184,11 +261,15 @@ class BoschRoomController:
             )
         )
         self._notify()
-        _LOGGER.info("AHC Bosch Companion loaded: output is OFF by default")
+        _LOGGER.info(
+            "AHC Bosch Companion loaded: output OFF, auto-resume opt-in=%s",
+            self.auto_resume_configured,
+        )
 
     async def async_stop(self) -> None:
         """Tear down callbacks; never issue commands on unload."""
         self.enabled = False
+        self.auto_resume_pending = False
         self._cancel_retry()
         for unsub in self._unsubs:
             unsub()
@@ -214,6 +295,9 @@ class BoschRoomController:
         new: State | None = event.data.get("new_state")
         if new is None:
             return
+        if new.entity_id in (self.data[CONF_ROOM_TEMPERATURE], *self.data[CONF_RADIATORS]):
+            if new.state not in UNKNOWN:
+                self._source_updates_after_start[new.entity_id] = monotonic()
         if new.entity_id == self.data[CONF_SCHEDULE]:
             if (
                 old is not None
@@ -235,6 +319,7 @@ class BoschRoomController:
         elif new.entity_id == self.data[CONF_ROOM_MODE]:
             self._handle_room_mode(self._mode_from_entity())
         self._notify()
+        self._attempt_auto_resume()
         self.queue_reconcile()
 
     @callback
@@ -278,6 +363,7 @@ class BoschRoomController:
             else None
         )
         if incoming is not None:
+            self._room_mqtt_seen_after_start = True
             if self.room_mode == "manual":
                 self.override_mode = "manual"
                 self.override_temperature = incoming
@@ -296,6 +382,7 @@ class BoschRoomController:
         if self.desired != old_desired:
             self._command_generation += 1
         self._notify()
+        self._attempt_auto_resume()
         self.queue_reconcile()
 
     @callback
@@ -316,6 +403,7 @@ class BoschRoomController:
             self._notify()
             return
         self.ahc_seen = True
+        self._last_ahc_event_at = monotonic()
         self.ahc_target = target
         self.ahc_hvac_mode = mode
         self.last_ahc_trigger = str(event.data.get("last_trigger_id", ""))
@@ -345,6 +433,7 @@ class BoschRoomController:
                 mode, target, self.ahc_protection, self.last_ahc_trigger,
             )
         self._notify()
+        self._attempt_auto_resume()
         self.queue_reconcile()
 
     @callback
@@ -385,6 +474,7 @@ class BoschRoomController:
             self.enabled
             and not self._pending_schedule_ahc
             and generation == self._command_generation
+            and (not self.auto_resume_configured or self._telemetry_recent())
         )
 
     async def _async_reconcile_loop(self) -> None:
@@ -492,6 +582,12 @@ class BoschRoomController:
     def async_set_control_enabled(self, enabled: bool) -> None:
         """Explicit user gate; turns OFF without modifying a physical valve."""
         self.enabled = enabled
+        if not enabled:
+            # Explicit OFF must not be undone by a pending auto-resume.
+            self.auto_resume_pending = False
+            self._auto_resume_ready_since = None
+        elif self.auto_resume_pending:
+            self.auto_resume_pending = False
         self._notify()
         if enabled:
             _LOGGER.warning("AHC Bosch Companion radiator output explicitly ENABLED")
