@@ -1,4 +1,4 @@
-# AHC Bosch Companion – beta architecture (0.1.0b1)
+# AHC Bosch Companion – beta architecture (0.1.0b3 proposed)
 
 ## Components
 
@@ -10,7 +10,7 @@
 - `controller.py`: Read `ahc_event` from exactly the configured AHC
   automation, watch MQTT room change source and selected HA schedule, arbitrate
   physical setpoint changes, schedule boundary resets and safety priorities.
-  Device command output is gated by a switch that initializes OFF on restart.
+  Device command output initializes OFF. In the proposed b3, an explicitly enabled auto-resume option may reopen it only after new matching AHC data, room MQTT data, both radiator HA state updates, and a 90-second stability period. This does not establish Zigbee command acknowledgements.
 - `climate.py`: Expose virtual ClimateEntity. AHC's thermostat list contains
   ONLY this entity; it exposes AHC requested target and room current temp.
   It **must not** expose local manual override as the AHC target.
@@ -37,8 +37,9 @@ future, separately validated integration step. AHC calibration must be OFF.
   Consecutive blocks with no state edge, multiple schedules or other AHC
   scheduler logic are not handled.
 - No automatic BTH-RM display synchronization.
-- No explicit Zigbee command acknowledgement or automatic restart after HA
-  reboot. Output resets OFF intentionally.
+- No explicit Zigbee command acknowledgement. Automatic resume is proposed as
+  a separate opt-in that starts OFF and waits for fresh HA/MQTT reports; a
+  physical delivery guarantee or safe unattended operation is NOT provided.
 - HA service calls can be accepted despite physical communication failures.
 - Only formal manifest tests and isolated policy tests exist; no Bosch hardware
   testing has been performed. **Use with supervision and rollback plan only.**
