@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Configure Bosch BTH-RM / BTH-RA and AHC",
-        "description": "Controlled BETA. Select ONE AHC schedule. Radiator climate and operating-mode select lists must be in exactly the same order; each pair must belong to the same HA device. Output is OFF on every start and requires explicit enabling via a switch. The AHC automation is optional during initial setup; select it later with Configure after the virtual climate exists.",
+        "description": "Controlled BETA. Select ONE AHC schedule. Radiator climate and operating-mode select lists must be in exactly the same order; each pair must belong to the same HA device. Output starts OFF; experimental guarded auto-resume can be explicitly opted into later. The AHC automation is optional during initial setup; select it later with Configure after the virtual climate exists.",
         "data": {
           "room_climate": "Bosch room thermostat climate entity",
           "room_operating_mode": "Bosch room thermostat operating mode (select)",
@@ -49,10 +49,11 @@
   "options": {
     "step": {
       "init": {
-        "title": "Assign the AHC automation",
-        "description": "First create AHC automation targeting the virtual climate, then select it here. Output remains disabled after reload.",
+        "title": "Assign AHC and configure auto-resume",
+        "description": "Experimental: auto-enable after restart only with fresh AHC, MQTT and radiator state reports and 90 seconds stable readiness. OFF by default. State reports are not Zigbee ACKs; unattended operation remains unverified.",
         "data": {
-          "ahc_automation": "AHC automation"
+          "ahc_automation": "AHC automation",
+          "auto_resume": "Experimental guarded auto-resume after restart (OFF by default)"
         }
       }
     },

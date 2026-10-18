@@ -94,3 +94,21 @@ zeitlich vergleichen (INFO-Logger: `custom_components.ahc_bosch_companion.contro
 Bei fehlendem neuem AHC-Ereignis bleibt die Ausgabe stehen, statt einen veralteten
 Sollwert auszugeben. Ein erfolgreiches HA-Service-Resultat ist keine Funkquittung.
 Ausgangsschalter AUS stoppt weitere neue Companion-Befehle, **nicht** die Ventile.
+
+
+## Vorgesehene Beta 0.1.0b3 – optionale automatische Wiederaufnahme
+
+**Noch nicht für unbeaufsichtigten Produktivbetrieb freigegeben.** Der hier beschriebene Branch ist ein Änderungsvorschlag, keine bereits installierte Funktion. Version 0.1.0b2 bleibt die Rückfallversion. **Nicht einfach den bisherigen Ausgangsschalter per HA-Startautomation einschalten.**
+
+Die Option **Auto-resume / Automatische Wiederaufnahme** ist in **AHC Bosch Companion → Konfigurieren** verfügbar, falls diese Beta später installiert und freigegeben wird. Sie ist **standardmäßig AUS**. Auch bei aktivierter Option startet der Ausgang zunächst AUS.
+
+Der Companion wartet nach einem Start auf:
+
+1. Ein *neues*, gültiges `ahc_event` der zugeordneten AHC-Automation und einen gültigen Sollwert bzw. OFF-Modus.
+2. Ein nicht-retainiertes Zigbee2MQTT-Raumtelegramm mit gültigem Sollwert.
+3. Neue HA-Zustandsmeldungen des Raumtemperatursensors und **beider** Heizkörper-Climates seit dem Start; diese dürfen höchstens 15 Minuten alt sein.
+4. Verfügbare gültige Raum-, Heizkörper- und Zeitplan-Entitäten ohne offenen Zeitplanwechsel; alle Prüfungen müssen anschließend **90 Sekunden** stabil bestehen.
+
+Erst dann darf der Ausgang automatisch auf EIN wechseln. Bei fehlenden Meldungen bleibt er AUS, auch für längere Zeit. `auto_resume_pending` und `auto_resume_blockers` der virtuellen Climate liefern Diagnosehinweise. Ein manuelles AUS verhindert eine automatische Reaktivierung **bis zum nächsten Neuladen/Neustart**.
+
+**Grenzen:** HA-Zustandsmeldungen sind keine physischen Zigbee-Quittungen. Die Heizkörper behalten während einer Ausgabesperre ihre letzten Ventil-Sollwerte; das ist **kein aktiver Not-Aus**. Nach Funkverlust können diese Sollwerte weiterwirken. Vor Aktivierung sind reale Wiederanlauf-, Zeitplan-, Fenster-/Frostschutz-, Verbindungsabbruch- und Rückfalltests mit unabhängiger Überwachung erforderlich. Die 15-Minuten-Sperre verhindert nur neue Befehle auf Basis zu alter HA-Meldungen, sie stoppt keine Heizkörper. Ohne diese Tests keine Freigabe für Nächte oder Urlaub.

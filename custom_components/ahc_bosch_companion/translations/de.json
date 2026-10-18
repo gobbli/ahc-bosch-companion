@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Bosch BTH-RM / BTH-RA und AHC einrichten",
-        "description": "Gesteuerte BETA. Genau EINEN AHC-Zeitplan auswählen. Heizkörper-Climates und Modus-Selects müssen in exakt gleicher Reihenfolge ausgewählt werden; jedes Paar muss zum selben HA-Gerät gehören. Die Ansteuerung bleibt nach jedem Start AUS und wird erst per Schalter freigegeben. Die AHC-Automation ist zunächst optional und wird nach Anlegen der virtuellen Climate-Entität unter 'Konfigurieren' ausgewählt.",
+        "description": "Gesteuerte BETA. Genau EINEN AHC-Zeitplan auswählen. Heizkörper-Climates und Modus-Selects müssen in exakt gleicher Reihenfolge ausgewählt werden; jedes Paar muss zum selben HA-Gerät gehören. Die Ansteuerung bleibt nach jedem Start zunächst AUS; eine experimentelle automatische Freigabe kann später explizit konfiguriert werden. Die AHC-Automation ist zunächst optional und wird nach Anlegen der virtuellen Climate-Entität unter 'Konfigurieren' ausgewählt.",
         "data": {
           "room_climate": "Bosch Raumthermostat (Climate)",
           "room_operating_mode": "Betriebsart des Raumthermostats (Select)",
@@ -29,10 +29,11 @@
   "options": {
     "step": {
       "init": {
-        "title": "AHC-Automation zuordnen",
-        "description": "Erst die AHC-Automation mit der virtuellen Climate-Entität erstellen, dann hier zuordnen. Der Steuerungsschalter bleibt nach dem Neustart aus.",
+        "title": "AHC zuordnen und automatischen Neustart konfigurieren",
+        "description": "Experimentell: Nach HA-Neustart nur bei frischen AHC-, MQTT- und Heizkörpermeldungen sowie 90 Sekunden stabilem Zustand automatisch freigeben. Standardmäßig AUS. Meldungen sind keine Zigbee-Quittungen; unbeaufsichtigter Betrieb bleibt ungeprüft.",
         "data": {
-          "ahc_automation": "AHC-Automation"
+          "ahc_automation": "AHC-Automation",
+          "auto_resume": "Experimentelle automatische Wiederaufnahme nach Neustart (standardmäßig AUS)"
         }
       }
     },

@@ -13,6 +13,7 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er, 
 
 from .const import (
     CONF_AHC_AUTOMATION,
+    CONF_AUTO_RESUME,
     CONF_RADIATORS,
     CONF_RADIATOR_MODES,
     CONF_ROOM_CLIMATE,
@@ -151,6 +152,10 @@ class AHCBoschOptionsFlow(OptionsFlowWithReload):
                     description={"suggested_value": current} if current else None,
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="automation")
-                )
+                ),
+                vol.Optional(
+                    CONF_AUTO_RESUME,
+                    default=self.config_entry.options.get(CONF_AUTO_RESUME, False),
+                ): selector.BooleanSelector(),
             }
         )

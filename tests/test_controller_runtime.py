@@ -44,6 +44,7 @@ package.__path__ = [str(COMPONENT)]
 constants = _module(package.__name__ + ".const")
 for key, value in {
     "CONF_AHC_AUTOMATION": "ahc_automation",
+    "CONF_AUTO_RESUME": "auto_resume",
     "CONF_RADIATORS": "radiator_climates",
     "CONF_RADIATOR_MODES": "radiator_modes",
     "CONF_ROOM_CLIMATE": "room_climate",

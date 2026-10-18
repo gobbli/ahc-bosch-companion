@@ -2,7 +2,7 @@
 
 A separate Home Assistant / HACS custom integration for Bosch Room Thermostat II (BTH-RM), Bosch Radiator Thermostat II (BTH-RA), Zigbee2MQTT and the unchanged AHC 5.5.9 blueprint.
 
-**Version 0.1.0b2: supervised pilot only, NOT approved for unattended heating.** The radiator output is OFF after every HA restart or integration reload until explicitly enabled using the Companion safety switch.
+**Version 0.1.0b3 (proposed): supervised pilot only, NOT approved for unattended heating.** The radiator output starts OFF after every HA restart or integration reload. Manual enabling remains the default; a separate, experimental auto-resume opt-in can be enabled in Configure. It only releases output after fresh AHC, room MQTT and both radiator HA updates plus 90 seconds of stable readiness. **HA updates are not Zigbee delivery/availability proofs.**
 
 ## How it works
 
@@ -15,6 +15,13 @@ A separate Home Assistant / HACS custom integration for Bosch Room Thermostat II
 - Keeps the existing ten-minute external temperature feeder unchanged; disable AHC calibration for the beta.
 - Does not update the room thermostat's display setpoint, and does not support multiple AHC schedules.
 
+## Proposed change in 0.1.0b3 (guarded automatic restart)
+
+- Separate opt-in `auto_resume` option; OFF by default. The previous manual-enable behavior is unchanged unless explicitly enabled.
+- Wait for one new event from the configured AHC automation, a non-retained room MQTT setpoint message, post-start updates from the room temperature sensor and both radiator climate entities, and 90 seconds of stable valid inputs. Status diagnostics are exposed as virtual-climate attributes.
+- Suppress new actuator commands when auto-resume has been configured but HA temperature/radiator updates are older than 15 minutes. Manually setting the output switch OFF cancels pending auto-resume for the current integration runtime.
+- This is NOT a Zigbee-acknowledged fail-safe. Real hardware startup, disconnect, heating safety, and recovery tests remain mandatory. Do not enable unattended heating based on mock tests.
+
 ## Changes in 0.1.0b2 (schedule/race hardening)
 
 - A schedule on/off edge suspends radiator commands until a new valid AHC event is received. This prevents a temporary manual override from reverting to the OLD comfort/eco target before AHC recalculates. If AHC never emits a valid event, the controller deliberately waits rather than issuing a stale target.
@@ -24,7 +31,7 @@ A separate Home Assistant / HACS custom integration for Bosch Room Thermostat II
 
 ## Safety boundaries
 
-A **successful Home Assistant service call is not Zigbee radio confirmation**. Check the real device state after each action. The safety switch OFF does not change valve positions; it simply stops further Companion commands. On restart the valves retain their previous physical state and automatic Companion output stays OFF. Do not operate unattended.
+A **successful Home Assistant service call is not Zigbee radio confirmation**. Check the real device state after each action. The safety switch OFF does not change valve positions; it simply stops further Companion commands. On restart the valves retain their previous physical state. Output starts OFF; it can auto-enable only after explicit opt-in and readiness checks. A blocked output does not stop a valve already heating. Do not operate unattended.
 
 **Do not run a legacy setpoint-sync automation or an AHC instance directly controlling the same physical radiators in parallel with the Companion.**
 
