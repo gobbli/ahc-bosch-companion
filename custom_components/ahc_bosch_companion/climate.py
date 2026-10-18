@@ -80,6 +80,10 @@ class AHCBoschClimate(ClimateEntity):
             "bosch_desired_mode": desired.mode if desired else None,
             "bosch_desired_temperature": desired.temperature if desired else None,
             "radiator_output_enabled": self._controller.enabled,
+            "auto_resume_configured": self._controller.auto_resume_configured,
+            "auto_resume_pending": self._controller.auto_resume_pending,
+            "auto_resume_blockers": self._controller.auto_resume_blockers,
+            "auto_resumed": self._controller.auto_resumed,
             "last_error": self._controller.last_error,
         }
 
